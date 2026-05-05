@@ -1,11 +1,16 @@
 {
   "name": "music-training",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "A practice room for working musicians — Nashville Number System drills in the browser.",
   "type": "module",
   "scripts": {
-    "dev": "python3 -m http.server 5173",
-    "start": "python3 -m http.server 5173"
+    "build": "esbuild app/javascript/application.jsx --bundle --sourcemap --format=esm --outdir=app/assets/builds --public-path=/assets",
+    "build:css": "node --input-type=module -e \"import fs from 'fs'; fs.cpSync('app/javascript/styles/app.css', 'app/assets/builds/app.css')\"",
+    "dev": "esbuild app/javascript/application.jsx --bundle --sourcemap --format=esm --outdir=app/assets/builds --public-path=/assets --watch"
+  },
+  "dependencies": {
+    "esbuild": "^0.25.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   }
 }
