@@ -6,8 +6,7 @@ import {
   ALL_KEYS, ALL_DEGREES, KEY_SCALES, DIATONIC_QUALITIES,
   chordForDegree, formatDegree, randomFrom, shuffle,
 } from '../theory.js';
-
-const TIMER_OPTIONS = [5, 10, 15, 30, 'off'];
+import { AUDIO_STYLES } from '../audio.js';
 
 export const nnsQuizModule = {
   id: 'nns-quiz',
@@ -22,11 +21,14 @@ export const nnsQuizModule = {
       keys: [...ALL_KEYS],
       secondsPerQuestion: 10,
       playAudio: true,
+      audioStyle: 'synth',
     };
   },
 
   renderSettings(container, settings, onChange) {
     const update = (patch) => onChange({ ...settings, ...patch });
+    const timerOff = settings.secondsPerQuestion === 'off';
+    const timerVal = timerOff ? 10 : settings.secondsPerQuestion;
 
     container.innerHTML = `
       <div class="settings-group">
@@ -56,20 +58,31 @@ export const nnsQuizModule = {
 
       <div class="settings-group">
         <h3>Time per question</h3>
-        <div class="chip-row" data-group="timer">
-          ${TIMER_OPTIONS.map(t => `
-            <button class="chip ${settings.secondsPerQuestion === t ? 'is-active' : ''}" data-timer="${t}">
-              ${t === 'off' ? 'Off' : `${t}s`}
-            </button>
-          `).join('')}
+        <div class="timer-input-row">
+          <input
+            type="number"
+            class="timer-number-input"
+            id="timer-seconds-input"
+            min="1"
+            max="300"
+            value="${timerVal}"
+            ${timerOff ? 'disabled' : ''}
+            placeholder="วินาที"
+          />
+          <span class="timer-unit">วิ</span>
+          <button class="chip ${timerOff ? 'is-active' : ''}" id="timer-off-btn">Off</button>
         </div>
       </div>
 
       <div class="settings-group">
-        <h3>Audio</h3>
-        <div class="chip-row">
-          <button class="chip ${settings.playAudio ? 'is-active' : ''}" data-audio="on">On</button>
-          <button class="chip ${!settings.playAudio ? 'is-active' : ''}" data-audio="off">Off</button>
+        <h3>Sound</h3>
+        <div class="chip-row" data-group="audio-style">
+          <button class="chip ${!settings.playAudio ? 'is-active' : ''}" data-audio-style="off">Off</button>
+          ${AUDIO_STYLES.map(s => `
+            <button class="chip ${settings.playAudio && settings.audioStyle === s.id ? 'is-active' : ''}" data-audio-style="${s.id}">
+              ${s.label}
+            </button>
+          `).join('')}
         </div>
       </div>
 
@@ -90,10 +103,12 @@ export const nnsQuizModule = {
       </div>
     `;
 
+    // Mode
     container.querySelectorAll('.mode-card').forEach(btn => {
       btn.addEventListener('click', () => update({ mode: btn.dataset.mode }));
     });
 
+    // Question count
     container.querySelectorAll('[data-count]').forEach(btn => {
       btn.addEventListener('click', () => {
         const val = btn.dataset.count;
@@ -112,18 +127,39 @@ export const nnsQuizModule = {
       });
     }
 
-    container.querySelectorAll('[data-timer]').forEach(btn => {
+    // Timer: number input + Off button
+    const timerInput = container.querySelector('#timer-seconds-input');
+    const timerOffBtn = container.querySelector('#timer-off-btn');
+    if (timerInput) {
+      timerInput.addEventListener('input', e => {
+        const n = Math.max(1, Math.min(300, parseInt(e.target.value, 10) || 1));
+        update({ secondsPerQuestion: n });
+      });
+    }
+    if (timerOffBtn) {
+      timerOffBtn.addEventListener('click', () => {
+        if (settings.secondsPerQuestion === 'off') {
+          // Toggle back on with last numeric value
+          update({ secondsPerQuestion: timerVal });
+        } else {
+          update({ secondsPerQuestion: 'off' });
+        }
+      });
+    }
+
+    // Audio style
+    container.querySelectorAll('[data-audio-style]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const raw = btn.dataset.timer;
-        const val = raw === 'off' ? 'off' : parseInt(raw, 10);
-        update({ secondsPerQuestion: val });
+        const val = btn.dataset.audioStyle;
+        if (val === 'off') {
+          update({ playAudio: false });
+        } else {
+          update({ playAudio: true, audioStyle: val });
+        }
       });
     });
 
-    container.querySelectorAll('[data-audio]').forEach(btn => {
-      btn.addEventListener('click', () => update({ playAudio: btn.dataset.audio === 'on' }));
-    });
-
+    // Keys
     container.querySelectorAll('[data-key]').forEach(btn => {
       btn.addEventListener('click', () => {
         const k = btn.dataset.key;
@@ -164,7 +200,7 @@ function buildQuestion(settings, index) {
   const quality = DIATONIC_QUALITIES[degree - 1];
 
   const timeLimit = settings.secondsPerQuestion === 'off' ? null : settings.secondsPerQuestion;
-  const audio = settings.playAudio ? { root, quality } : null;
+  const audio = settings.playAudio ? { root, quality, style: settings.audioStyle } : null;
 
   if (settings.mode === 'degree-to-chord') {
     const choices = ALL_DEGREES.map(d => chordForDegree(key, d));

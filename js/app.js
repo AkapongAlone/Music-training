@@ -216,8 +216,8 @@ function renderSession() {
 
   if (hasAudio) {
     const audioBtn = document.getElementById('audio-btn');
-    audioBtn.addEventListener('click', () => playChord(q.audio.root, q.audio.quality));
-    if (!answered) playChord(q.audio.root, q.audio.quality);
+    audioBtn.addEventListener('click', () => playChord(q.audio.root, q.audio.quality, q.audio.style));
+    if (!answered) playChord(q.audio.root, q.audio.quality, q.audio.style);
   }
 
   if (answered) {

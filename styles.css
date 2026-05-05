@@ -453,6 +453,47 @@ input { font-family: inherit; }
   border-color: var(--accent);
 }
 
+/* Timer: number input row */
+.timer-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.timer-number-input {
+  width: 90px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 15px;
+  font-family: var(--font-mono);
+  background: var(--card);
+  color: var(--ink);
+  text-align: center;
+  transition: border-color 160ms ease;
+}
+.timer-number-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.timer-number-input:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.timer-number-input::-webkit-inner-spin-button,
+.timer-number-input::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
+.timer-unit {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--muted);
+  font-weight: 500;
+  margin-right: 4px;
+}
+
 .settings-actions {
   display: flex;
   flex-direction: column;
