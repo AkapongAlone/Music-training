@@ -494,6 +494,24 @@ input { font-family: inherit; }
   margin-right: 4px;
 }
 
+.settings-hint {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+  font-family: var(--font-display);
+}
+
+/* Ear-training prompt: ♪ glyph is a bit smaller than degree numbers */
+.prompt-left-ear {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(48px, 10vw, 80px);
+  line-height: 1;
+  color: var(--accent);
+  font-variation-settings: "opsz" 144;
+}
+
 .settings-actions {
   display: flex;
   flex-direction: column;

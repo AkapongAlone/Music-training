@@ -2,10 +2,12 @@
 // Add new exercise modules by importing them and dropping them into MODULES.
 
 import { nnsQuizModule } from './modules/nns-quiz.js';
+import { chordEarModule } from './modules/chord-ear.js';
 import { playChord } from './audio.js';
 
 const MODULES = {
   [nnsQuizModule.id]: nnsQuizModule,
+  [chordEarModule.id]: chordEarModule,
 };
 
 // ---- App state -----------------------------------------------------------
