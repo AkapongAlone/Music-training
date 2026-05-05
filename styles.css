@@ -508,12 +508,73 @@ input { font-family: inherit; }
   white-space: nowrap;
 }
 
+/* Per-question countdown timer */
+.timer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.timer-bar {
+  flex: 1;
+  height: 3px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.timer-fill {
+  height: 100%;
+  background: var(--ink-soft);
+  border-radius: 999px;
+  transition: width 100ms linear, background-color 200ms ease;
+}
+.timer-fill.is-warning {
+  background: var(--accent);
+}
+.timer-text {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 56px;
+  text-align: right;
+}
+
 .prompt {
   text-align: center;
   padding: 56px 0 64px;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   margin-bottom: 40px;
+}
+
+/* Replay-chord button under the prompt */
+.audio-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-body);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: all 160ms ease;
+}
+.audio-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.audio-icon {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--accent);
 }
 
 .prompt-line {
@@ -565,6 +626,18 @@ input { font-family: inherit; }
   .choices { grid-template-columns: 1fr; gap: 10px; }
 }
 
+/* 7-up grid for full diatonic choices: 4 across (last centered), 2 across on small. */
+.choices-7 {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+@media (max-width: 720px) {
+  .choices-7 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 380px) {
+  .choices-7 { grid-template-columns: 1fr; }
+}
+
 .choice {
   padding: 22px;
   background: var(--card);
@@ -576,6 +649,10 @@ input { font-family: inherit; }
   letter-spacing: -0.01em;
   font-variation-settings: "opsz" 60;
   transition: all 160ms ease;
+}
+.choices-7 .choice {
+  padding: 16px 10px;
+  font-size: 22px;
 }
 .choice:hover:not(:disabled) {
   border-color: var(--ink);

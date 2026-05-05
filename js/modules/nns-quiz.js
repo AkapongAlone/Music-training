@@ -1,21 +1,13 @@
 // NNS Quiz module.
-// To add a new exercise type, create a similar file and register it in app.js.
-//
-// A module exports an object with this shape:
-//   {
-//     id, name, tagline, description,
-//     defaultSettings(): SettingsObject,
-//     renderSettings(container, settings, onChange): void
-//       - mounts settings UI into `container`, calls onChange(newSettings) on edits
-//     generateQuestions(settings): Question[]
-//       - Question = { id, prompt, choices, correct, meta? }
-//       - prompt is rendered by the generic Session screen as { left, right }
-//   }
+// Each question shows all 7 diatonic choices, optionally with a per-question
+// time limit and an audible chord cue.
 
 import {
   ALL_KEYS, ALL_DEGREES, KEY_SCALES, DIATONIC_QUALITIES,
-  chordForDegree, formatChord, formatDegree, randomFrom, shuffle,
+  chordForDegree, formatDegree, randomFrom, shuffle,
 } from '../theory.js';
+
+const TIMER_OPTIONS = [5, 10, 15, 30, 'off'];
 
 export const nnsQuizModule = {
   id: 'nns-quiz',
@@ -25,10 +17,11 @@ export const nnsQuizModule = {
 
   defaultSettings() {
     return {
-      mode: 'degree-to-chord', // or 'chord-to-degree'
+      mode: 'degree-to-chord',
       questionCount: 10,
       keys: [...ALL_KEYS],
-      degrees: [...ALL_DEGREES],
+      secondsPerQuestion: 10,
+      playAudio: true,
     };
   },
 
@@ -62,6 +55,25 @@ export const nnsQuizModule = {
       </div>
 
       <div class="settings-group">
+        <h3>Time per question</h3>
+        <div class="chip-row" data-group="timer">
+          ${TIMER_OPTIONS.map(t => `
+            <button class="chip ${settings.secondsPerQuestion === t ? 'is-active' : ''}" data-timer="${t}">
+              ${t === 'off' ? 'Off' : `${t}s`}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <h3>Audio</h3>
+        <div class="chip-row">
+          <button class="chip ${settings.playAudio ? 'is-active' : ''}" data-audio="on">On</button>
+          <button class="chip ${!settings.playAudio ? 'is-active' : ''}" data-audio="off">Off</button>
+        </div>
+      </div>
+
+      <div class="settings-group">
         <div class="settings-head">
           <h3>Keys</h3>
           <div class="quick-actions">
@@ -76,29 +88,12 @@ export const nnsQuizModule = {
           `).join('')}
         </div>
       </div>
-
-      <div class="settings-group">
-        <div class="settings-head">
-          <h3>Degrees</h3>
-          <div class="quick-actions">
-            <button class="link-btn" data-degrees="all">All</button>
-            <button class="link-btn" data-degrees="none">None</button>
-          </div>
-        </div>
-        <div class="chip-grid" data-group="degrees">
-          ${ALL_DEGREES.map(d => `
-            <button class="chip ${settings.degrees.includes(d) ? 'is-active' : ''}" data-degree="${d}">${formatDegree(d)}</button>
-          `).join('')}
-        </div>
-      </div>
     `;
 
-    // Mode selection
     container.querySelectorAll('.mode-card').forEach(btn => {
       btn.addEventListener('click', () => update({ mode: btn.dataset.mode }));
     });
 
-    // Question count
     container.querySelectorAll('[data-count]').forEach(btn => {
       btn.addEventListener('click', () => {
         const val = btn.dataset.count;
@@ -117,7 +112,18 @@ export const nnsQuizModule = {
       });
     }
 
-    // Keys: individual + quick actions
+    container.querySelectorAll('[data-timer]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const raw = btn.dataset.timer;
+        const val = raw === 'off' ? 'off' : parseInt(raw, 10);
+        update({ secondsPerQuestion: val });
+      });
+    });
+
+    container.querySelectorAll('[data-audio]').forEach(btn => {
+      btn.addEventListener('click', () => update({ playAudio: btn.dataset.audio === 'on' }));
+    });
+
     container.querySelectorAll('[data-key]').forEach(btn => {
       btn.addEventListener('click', () => {
         const k = btn.dataset.key;
@@ -133,28 +139,11 @@ export const nnsQuizModule = {
         if (btn.dataset.keys === 'naturals') update({ keys: ALL_KEYS.filter(k => k.length === 1) });
       });
     });
-
-    // Degrees: individual + quick actions
-    container.querySelectorAll('[data-degree]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const d = parseInt(btn.dataset.degree, 10);
-        const has = settings.degrees.includes(d);
-        const next = has ? settings.degrees.filter(x => x !== d) : [...settings.degrees, d];
-        update({ degrees: next });
-      });
-    });
-    container.querySelectorAll('[data-degrees]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (btn.dataset.degrees === 'all')  update({ degrees: [...ALL_DEGREES] });
-        if (btn.dataset.degrees === 'none') update({ degrees: [] });
-      });
-    });
   },
 
   validate(settings) {
     const errors = [];
     if (settings.keys.length === 0) errors.push('Pick at least one key.');
-    if (settings.degrees.length === 0) errors.push('Pick at least one degree.');
     if (!settings.questionCount || settings.questionCount < 1) errors.push('Pick at least one question.');
     return errors;
   },
@@ -170,70 +159,38 @@ export const nnsQuizModule = {
 
 function buildQuestion(settings, index) {
   const key = randomFrom(settings.keys);
-  const degree = randomFrom(settings.degrees);
+  const degree = randomFrom(ALL_DEGREES);
+  const root = KEY_SCALES[key][degree - 1];
+  const quality = DIATONIC_QUALITIES[degree - 1];
+
+  const timeLimit = settings.secondsPerQuestion === 'off' ? null : settings.secondsPerQuestion;
+  const audio = settings.playAudio ? { root, quality } : null;
 
   if (settings.mode === 'degree-to-chord') {
+    const choices = ALL_DEGREES.map(d => chordForDegree(key, d));
     const correct = chordForDegree(key, degree);
-    const decoys = chordDecoys(key, degree, correct);
     return {
       id: index,
       meta: { key, degree, mode: settings.mode },
       prompt: { left: formatDegree(degree), right: `of ${key}` },
-      choices: shuffle([correct, ...decoys]),
+      choices: shuffle(choices),
       correct,
+      timeLimit,
+      audio,
     };
   }
 
   // chord-to-degree
   const chord = chordForDegree(key, degree);
   const correct = formatDegree(degree);
-  const decoys = degreeDecoys(degree, correct);
+  const choices = ALL_DEGREES.map(d => formatDegree(d));
   return {
     id: index,
     meta: { key, degree, mode: settings.mode },
     prompt: { left: chord, right: `in ${key}` },
-    choices: shuffle([correct, ...decoys]),
+    choices: shuffle(choices),
     correct,
+    timeLimit,
+    audio,
   };
-}
-
-// Decoys for "Degree → Chord": mix of other diatonic chords from the same key
-// plus a "wrong quality, same root" trap (e.g. E instead of Em for 3 of C).
-function chordDecoys(key, degree, correct) {
-  const decoys = new Set();
-
-  const otherDegrees = ALL_DEGREES.filter(d => d !== degree);
-  for (const d of shuffle(otherDegrees)) {
-    decoys.add(chordForDegree(key, d));
-    if (decoys.size >= 2) break;
-  }
-
-  const root = KEY_SCALES[key][degree - 1];
-  const correctQuality = DIATONIC_QUALITIES[degree - 1];
-  const otherQualities = ['maj', 'min', 'dim'].filter(q => q !== correctQuality);
-  for (const q of shuffle(otherQualities)) {
-    const candidate = formatChord(root, q);
-    if (candidate !== correct && !decoys.has(candidate)) {
-      decoys.add(candidate);
-      break;
-    }
-  }
-
-  // Fallback: pad with random diatonic chords from any key.
-  while (decoys.size < 3) {
-    const c = chordForDegree(randomFrom(ALL_KEYS), randomFrom(ALL_DEGREES));
-    if (c !== correct) decoys.add(c);
-  }
-
-  return [...decoys].slice(0, 3);
-}
-
-// Decoys for "Chord → Degree": other formatted degree numbers.
-function degreeDecoys(degree, correct) {
-  const decoys = new Set();
-  for (const d of shuffle(ALL_DEGREES.filter(x => x !== degree))) {
-    decoys.add(formatDegree(d));
-    if (decoys.size >= 3) break;
-  }
-  return [...decoys];
 }

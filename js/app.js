@@ -2,6 +2,7 @@
 // Add new exercise modules by importing them and dropping them into MODULES.
 
 import { nnsQuizModule } from './modules/nns-quiz.js';
+import { playChord } from './audio.js';
 
 const MODULES = {
   [nnsQuizModule.id]: nnsQuizModule,
@@ -15,10 +16,13 @@ const state = {
   settings: null,
   questions: [],
   currentIndex: 0,
-  answers: [],             // [{ questionId, picked, correct }]
-  // Settings used to build current questions, kept so "Start over" can rerun.
+  answers: [],             // [{ questionId, picked, correct, timedOut? }]
   lastUsedSettings: null,
 };
+
+// Per-question timer handles. Cleared on answer / quit / advance.
+let timerInterval = null;
+let timerDeadline = 0;
 
 const root = document.getElementById('app');
 
@@ -27,7 +31,7 @@ const root = document.getElementById('app');
 function render() {
   window.scrollTo({ top: 0, behavior: 'instant' });
   root.classList.remove('fade-in');
-  void root.offsetWidth; // restart css animation
+  void root.offsetWidth;
   root.classList.add('fade-in');
 
   switch (state.screen) {
@@ -140,13 +144,17 @@ function renderSettings() {
 }
 
 // ---- Session -------------------------------------------------------------
-// Generic across all modules: takes Question[] and walks through them.
 
 function renderSession() {
+  stopTimer();
+
   const q = state.questions[state.currentIndex];
   const total = state.questions.length;
   const progress = ((state.currentIndex) / total) * 100;
   const answered = state.answers.find(a => a.questionId === q.id);
+
+  const hasTimer = q.timeLimit != null;
+  const hasAudio = q.audio != null;
 
   root.innerHTML = `
     <header class="session-head">
@@ -157,15 +165,28 @@ function renderSession() {
       </div>
     </header>
 
+    ${hasTimer ? `
+      <div class="timer">
+        <div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%"></div></div>
+        <span class="timer-text" id="timer-text">${q.timeLimit}s</span>
+      </div>
+    ` : ''}
+
     <section class="prompt">
       <div class="prompt-line">
         <span class="prompt-left">${q.prompt.left}</span>
         <span class="prompt-right">${q.prompt.right}</span>
       </div>
       <div class="prompt-equals">= <span class="prompt-q">?</span></div>
+      ${hasAudio ? `
+        <button class="audio-btn" id="audio-btn" title="Replay chord" aria-label="Replay chord">
+          <span class="audio-icon" aria-hidden="true">♪</span>
+          <span>Replay</span>
+        </button>
+      ` : ''}
     </section>
 
-    <section class="choices">
+    <section class="choices choices-7">
       ${q.choices.map(c => `
         <button class="choice" data-value="${escapeAttr(c)}">${c}</button>
       `).join('')}
@@ -180,6 +201,7 @@ function renderSession() {
 
   document.getElementById('quit-btn').addEventListener('click', () => {
     if (confirm('Quit this session? Progress will be lost.')) {
+      stopTimer();
       state.screen = 'home';
       render();
     }
@@ -190,18 +212,65 @@ function renderSession() {
   });
 
   const nextBtn = document.getElementById('next-btn');
-  if (nextBtn) {
-    nextBtn.addEventListener('click', advance);
+  if (nextBtn) nextBtn.addEventListener('click', advance);
+
+  if (hasAudio) {
+    const audioBtn = document.getElementById('audio-btn');
+    audioBtn.addEventListener('click', () => playChord(q.audio.root, q.audio.quality));
+    if (!answered) playChord(q.audio.root, q.audio.quality);
   }
 
-  // If already answered (rare — re-renders), reflect feedback.
-  if (answered) paintFeedback(q, answered.picked);
+  if (answered) {
+    paintFeedback(q, answered.picked);
+  } else if (hasTimer) {
+    startTimer(q.timeLimit);
+  }
+}
+
+function startTimer(seconds) {
+  const fill = document.getElementById('timer-fill');
+  const text = document.getElementById('timer-text');
+  if (!fill || !text) return;
+
+  const duration = seconds * 1000;
+  timerDeadline = performance.now() + duration;
+
+  const tick = () => {
+    const remaining = Math.max(0, timerDeadline - performance.now());
+    const pct = (remaining / duration) * 100;
+    fill.style.width = `${pct}%`;
+    text.textContent = `${Math.ceil(remaining / 1000)}s`;
+    if (remaining <= 3000) fill.classList.add('is-warning');
+    if (remaining <= 0) {
+      stopTimer();
+      handleTimeout();
+    }
+  };
+
+  tick();
+  timerInterval = setInterval(tick, 100);
+}
+
+function stopTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+}
+
+function handleTimeout() {
+  const q = state.questions[state.currentIndex];
+  if (state.answers.find(a => a.questionId === q.id)) return;
+  state.answers.push({ questionId: q.id, picked: null, correct: false, timedOut: true });
+  paintFeedback(q, null);
+  document.getElementById('next-btn').classList.remove('is-hidden');
 }
 
 function handleAnswer(picked) {
   const q = state.questions[state.currentIndex];
-  if (state.answers.find(a => a.questionId === q.id)) return; // already answered
+  if (state.answers.find(a => a.questionId === q.id)) return;
 
+  stopTimer();
   const correct = picked === q.correct;
   state.answers.push({ questionId: q.id, picked, correct });
   paintFeedback(q, picked);
@@ -214,12 +283,15 @@ function paintFeedback(q, picked) {
     btn.disabled = true;
     const v = btn.dataset.value;
     if (v === q.correct) btn.classList.add('is-correct');
-    else if (v === picked) btn.classList.add('is-wrong');
+    else if (picked != null && v === picked) btn.classList.add('is-wrong');
     else btn.classList.add('is-faded');
   });
+  const text = document.getElementById('timer-text');
+  if (text && picked == null) text.textContent = "Time's up";
 }
 
 function advance() {
+  stopTimer();
   if (state.currentIndex + 1 >= state.questions.length) {
     state.screen = 'result';
   } else {
@@ -228,7 +300,6 @@ function advance() {
   render();
 }
 
-// Allow Enter to advance after an answer.
 document.addEventListener('keydown', (e) => {
   if (state.screen !== 'session') return;
   if (e.key !== 'Enter') return;
@@ -275,13 +346,14 @@ function renderResult() {
         <ul class="review-list">
           ${wrongQuestions.map((q, i) => {
             const a = wrongAnswers[i];
+            const youLabel = a.timedOut ? 'You: —' : `You: ${a.picked}`;
             return `
               <li class="review-item">
                 <div class="review-prompt">
                   <span class="review-q">${q.prompt.left} <span class="muted">${q.prompt.right}</span></span>
                 </div>
                 <div class="review-answers">
-                  <span class="review-wrong">You: ${a.picked}</span>
+                  <span class="review-wrong">${youLabel}${a.timedOut ? ' <span class="muted">(timeout)</span>' : ''}</span>
                   <span class="review-correct">Correct: ${q.correct}</span>
                 </div>
               </li>
@@ -304,7 +376,6 @@ function renderResult() {
   const retryBtn = document.getElementById('retry-wrong-btn');
   if (retryBtn) {
     retryBtn.addEventListener('click', () => {
-      // Re-run the session with only the questions we got wrong.
       state.questions = wrongQuestions.map((q, i) => ({ ...q, id: i }));
       state.currentIndex = 0;
       state.answers = [];
