@@ -26,11 +26,33 @@ const state = {
 let timerInterval = null;
 let timerDeadline = 0;
 
+// Tracks the pending setTimeout for the second chord in two-sound playback.
+let audioSequenceTimer = null;
+
 const root = document.getElementById('app');
+
+// ---- Audio helpers -------------------------------------------------------
+
+// If a question has keyAudio, play the key root chord first, then the question
+// chord 500ms later. Otherwise play the question chord immediately.
+function playQuestionAudio(q) {
+  clearTimeout(audioSequenceTimer);
+  if (!q.audio) return;
+
+  if (q.keyAudio) {
+    playChord(q.keyAudio.root, q.keyAudio.quality, q.keyAudio.style);
+    audioSequenceTimer = setTimeout(() => {
+      playChord(q.audio.root, q.audio.quality, q.audio.style);
+    }, 1000);
+  } else {
+    playChord(q.audio.root, q.audio.quality, q.audio.style);
+  }
+}
 
 // ---- Render router -------------------------------------------------------
 
 function render() {
+  clearTimeout(audioSequenceTimer);
   window.scrollTo({ top: 0, behavior: 'instant' });
   root.classList.remove('fade-in');
   void root.offsetWidth;
@@ -204,6 +226,7 @@ function renderSession() {
   document.getElementById('quit-btn').addEventListener('click', () => {
     if (confirm('Quit this session? Progress will be lost.')) {
       stopTimer();
+      clearTimeout(audioSequenceTimer);
       state.screen = 'home';
       render();
     }
@@ -218,8 +241,8 @@ function renderSession() {
 
   if (hasAudio) {
     const audioBtn = document.getElementById('audio-btn');
-    audioBtn.addEventListener('click', () => playChord(q.audio.root, q.audio.quality, q.audio.style));
-    if (!answered) playChord(q.audio.root, q.audio.quality, q.audio.style);
+    audioBtn.addEventListener('click', () => playQuestionAudio(q));
+    if (!answered) playQuestionAudio(q);
   }
 
   if (answered) {
@@ -294,6 +317,7 @@ function paintFeedback(q, picked) {
 
 function advance() {
   stopTimer();
+  clearTimeout(audioSequenceTimer);
   if (state.currentIndex + 1 >= state.questions.length) {
     state.screen = 'result';
   } else {

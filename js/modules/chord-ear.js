@@ -198,6 +198,8 @@ function buildQuestion(settings, index) {
     choices,
     correct,
     timeLimit,
+    // keyAudio plays first (root of the selected key) so the student has tonal context.
+    keyAudio: { root: key, quality: 'maj', style: settings.audioStyle },
     audio: { root, quality, style: settings.audioStyle },
   };
 }
